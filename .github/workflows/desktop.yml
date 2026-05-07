@@ -48,7 +48,7 @@ jobs:
         include:
           - name: Windows
             os: windows-latest
-            args: --bundles nsis
+            args: --bundles nsis,msi
           - name: Linux
             os: ubuntu-22.04
             args: --bundles appimage,deb
