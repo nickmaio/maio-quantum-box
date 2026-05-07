@@ -1,6 +1,6 @@
 # Maio Quantum Box
 
-Maio Quantum Box is a single-page browser quantum-proof encryption tool. It provides a focused interface for encrypting and decrypting text locally with the Web Crypto API.
+Maio Quantum Box is a quantum-proof encryption tool. Can be used to encrypt private data before sending with messaging apps, email, etc. so no third party can decrypt and inspect it, even with the help of quantum computers and AGI.
 
 It doesn't send data to the Internet: there is no backend, database, authentication layer, or server-side storage.
 
@@ -11,11 +11,9 @@ Desktop builds are published through GitHub Releases:
 - [Latest release](https://github.com/nickmaio/maio-quantum-lock/releases/latest)
 - [All releases](https://github.com/nickmaio/maio-quantum-lock/releases)
 
-Release assets are built by GitHub Actions for Windows, Linux, and macOS. Branch and pull-request builds are available as temporary workflow artifacts under [Desktop Builds](https://github.com/nickmaio/maio-quantum-lock/actions/workflows/desktop.yml).
-
 Recommended install assets:
 
-- Windows: NSIS installer from the latest release
+- Windows: installer from the latest release
 - Linux: AppImage or `.deb` package from the latest release
 - macOS: `.dmg` package from the latest release
 
@@ -24,7 +22,7 @@ Recommended install assets:
 - Interactive encryption/decryption lab using AES-GCM in the browser
 - Versioned encrypted payload format with legacy payload compatibility
 
-## Getting Started
+## Run Locally
 
 ### Prerequisites
 
@@ -58,65 +56,6 @@ npm run build
 
 ```bash
 npm run preview
-```
-
-### Native Windows App
-
-This project includes a Tauri desktop wrapper in `src-tauri/`.
-
-Install the Windows prerequisites before running native commands:
-
-- Rust through `rustup`
-- Microsoft Visual Studio Build Tools with MSVC and the Windows SDK
-- Microsoft Edge WebView2 Runtime
-
-Run the desktop app in development:
-
-```bash
-npm run tauri:dev
-```
-
-Build the Windows installer and app bundle:
-
-```bash
-npm run tauri:build
-```
-
-Build only the native `.exe` without creating an installer:
-
-```bash
-npm run tauri:build:exe
-```
-
-Build the MSI installer:
-
-```bash
-npm run tauri:build:msi
-```
-
-### GitHub Actions
-
-The `.github/workflows/desktop.yml` workflow runs lint, tests, the web build, and native Tauri builds for Windows, Linux, and macOS.
-
-Branch and pull-request builds upload desktop packages as workflow artifacts. Pushing a version tag creates a draft GitHub Release with the desktop packages attached:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Review and publish the draft release after the platform builds finish. Do not commit generated binaries to the repository; keep distributable builds attached to versioned GitHub Releases.
-
-### Test
-
-```bash
-npm run test
-```
-
-### Lint
-
-```bash
-npm run lint
 ```
 
 ## Encryption Lab
