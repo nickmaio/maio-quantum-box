@@ -26,7 +26,7 @@ const features = [
   {
     icon: FileKey,
     title: "Portable output",
-    text: "Ciphertext uses a versioned mqb1 envelope with salt, IV, and encrypted data bundled together.",
+    text: "Ciphertext exports as mv1 and can decrypt compact m1 messenger payloads.",
   },
 ];
 
@@ -130,13 +130,13 @@ const LabSection = () => {
 
                 <div>
                   <label className="text-xs font-code text-muted-foreground uppercase tracking-widest mb-1.5 block">
-                    Secret Key
+                    Decryption Key
                   </label>
                   <Input
                     type="password"
                     value={key}
                     onChange={(e) => setKey(e.target.value)}
-                    placeholder="Enter your secret key..."
+                    placeholder="Enter your decryption key..."
                     className="bg-input border-border focus:border-primary rounded-lg font-mono text-sm"
                   />
                 </div>

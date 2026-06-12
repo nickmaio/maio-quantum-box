@@ -1,7 +1,13 @@
-const FORMAT_VERSION = "mqb1";
+const PORTABLE_FORMAT_VERSION = "mv1";
+const MESSENGER_FORMAT_VERSION = "m1";
+const MESSENGER_FIXED_SALT = "maio-quantum-box:m1:password-kdf:v1";
+const OBJECT_ID_LENGTH = 12;
 const SALT_LENGTH = 16;
-const IV_LENGTH = 12;
+const GCM_TAG_LENGTH = 16;
 const PBKDF2_ITERATIONS = 600000;
+
+let objectIdRandom = null;
+let objectIdCounter = null;
 
 function getCrypto() {
   const cryptoApi = globalThis.crypto;
@@ -41,43 +47,71 @@ function base64UrlToBytes(encoded) {
   return base64ToBytes(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
 }
 
-function encodePayload(salt, iv, ciphertext) {
-  return [
-    FORMAT_VERSION,
-    bytesToBase64Url(salt),
-    bytesToBase64Url(iv),
-    bytesToBase64Url(new Uint8Array(ciphertext)),
-  ].join(".");
-}
+function concatBytes(...parts) {
+  const length = parts.reduce((total, part) => total + part.length, 0);
+  const combined = new Uint8Array(length);
+  let offset = 0;
 
-function decodePayload(encoded) {
-  if (encoded.startsWith(`${FORMAT_VERSION}.`)) {
-    const parts = encoded.split(".");
-    if (parts.length !== 4) {
-      throw new Error("Invalid encrypted payload format.");
-    }
-    const [, saltPart, ivPart, ciphertextPart] = parts;
-    const salt = base64UrlToBytes(saltPart);
-    const iv = base64UrlToBytes(ivPart);
-    const ciphertext = base64UrlToBytes(ciphertextPart);
-
-    if (salt.length !== SALT_LENGTH || iv.length !== IV_LENGTH || ciphertext.length === 0) {
-      throw new Error("Invalid encrypted payload contents.");
-    }
-
-    return { salt, iv, ciphertext };
+  for (const part of parts) {
+    combined.set(part, offset);
+    offset += part.length;
   }
 
-  const legacyPayload = base64ToBytes(encoded);
-  if (legacyPayload.length <= SALT_LENGTH + IV_LENGTH) {
+  return combined;
+}
+
+function encodePayload(objectId, salt, ciphertext) {
+  return `${PORTABLE_FORMAT_VERSION}.${bytesToBase64Url(
+    concatBytes(objectId, salt, new Uint8Array(ciphertext))
+  )}`;
+}
+
+function decodePortablePayload(encoded) {
+  const parts = encoded.split(".");
+  if (parts.length !== 2 || parts[0] !== PORTABLE_FORMAT_VERSION) {
+    throw new Error("Invalid encrypted payload format.");
+  }
+
+  const payload = base64UrlToBytes(parts[1]);
+  if (payload.length <= OBJECT_ID_LENGTH + SALT_LENGTH + GCM_TAG_LENGTH) {
     throw new Error("Invalid encrypted payload contents.");
   }
 
   return {
-    salt: legacyPayload.slice(0, SALT_LENGTH),
-    iv: legacyPayload.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH),
-    ciphertext: legacyPayload.slice(SALT_LENGTH + IV_LENGTH),
+    objectId: payload.slice(0, OBJECT_ID_LENGTH),
+    salt: payload.slice(OBJECT_ID_LENGTH, OBJECT_ID_LENGTH + SALT_LENGTH),
+    ciphertext: payload.slice(OBJECT_ID_LENGTH + SALT_LENGTH),
   };
+}
+
+function decodeMessengerPayload(encoded) {
+  const parts = encoded.split(".");
+  if (parts.length !== 2 || parts[0] !== MESSENGER_FORMAT_VERSION) {
+    throw new Error("Invalid encrypted payload format.");
+  }
+
+  const payload = base64UrlToBytes(parts[1]);
+  if (payload.length <= OBJECT_ID_LENGTH + GCM_TAG_LENGTH) {
+    throw new Error("Invalid encrypted payload contents.");
+  }
+
+  return {
+    objectId: payload.slice(0, OBJECT_ID_LENGTH),
+    salt: new TextEncoder().encode(MESSENGER_FIXED_SALT),
+    ciphertext: payload.slice(OBJECT_ID_LENGTH),
+  };
+}
+
+function decodePayload(encoded) {
+  if (encoded.startsWith(`${PORTABLE_FORMAT_VERSION}.`)) {
+    return decodePortablePayload(encoded);
+  }
+
+  if (encoded.startsWith(`${MESSENGER_FORMAT_VERSION}.`)) {
+    return decodeMessengerPayload(encoded);
+  }
+
+  throw new Error("Invalid encrypted payload format.");
 }
 
 async function deriveKey(password, salt) {
@@ -103,27 +137,51 @@ async function deriveKey(password, salt) {
   );
 }
 
+function generateObjectId() {
+  const cryptoApi = getCrypto();
+
+  if (!objectIdRandom || objectIdCounter === null) {
+    objectIdRandom = cryptoApi.getRandomValues(new Uint8Array(5));
+    const counterSeed = cryptoApi.getRandomValues(new Uint8Array(3));
+    objectIdCounter = (counterSeed[0] << 16) | (counterSeed[1] << 8) | counterSeed[2];
+  }
+
+  const objectId = new Uint8Array(OBJECT_ID_LENGTH);
+  const timestamp = Math.floor(Date.now() / 1000);
+  objectId[0] = (timestamp >>> 24) & 0xff;
+  objectId[1] = (timestamp >>> 16) & 0xff;
+  objectId[2] = (timestamp >>> 8) & 0xff;
+  objectId[3] = timestamp & 0xff;
+  objectId.set(objectIdRandom, 4);
+  objectId[9] = (objectIdCounter >>> 16) & 0xff;
+  objectId[10] = (objectIdCounter >>> 8) & 0xff;
+  objectId[11] = objectIdCounter & 0xff;
+  objectIdCounter = (objectIdCounter + 1) & 0xffffff;
+
+  return objectId;
+}
+
 export async function encrypt(plaintext, password) {
   const cryptoApi = getCrypto();
   const enc = new TextEncoder();
+  const objectId = generateObjectId();
   const salt = cryptoApi.getRandomValues(new Uint8Array(SALT_LENGTH));
-  const iv = cryptoApi.getRandomValues(new Uint8Array(IV_LENGTH));
   const key = await deriveKey(password, salt);
   const ciphertext = await cryptoApi.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: objectId },
     key,
     enc.encode(plaintext)
   );
-  return encodePayload(salt, iv, ciphertext);
+  return encodePayload(objectId, salt, ciphertext);
 }
 
 export async function decrypt(encoded, password) {
   const cryptoApi = getCrypto();
   const dec = new TextDecoder();
-  const { salt, iv, ciphertext } = decodePayload(encoded);
+  const { objectId, salt, ciphertext } = decodePayload(encoded);
   const key = await deriveKey(password, salt);
   const plaintext = await cryptoApi.subtle.decrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: objectId },
     key,
     ciphertext
   );

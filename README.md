@@ -19,8 +19,8 @@ Recommended install assets:
 
 ## Features
 
-- Interactive encryption/decryption lab using AES-GCM in the browser
-- Versioned encrypted payload format with legacy payload compatibility
+- Interactive encryption/decryption lab using AES-GCM in the browser and desktop apps
+- Versioned encrypted payload format for standalone and mobile messaging workflows
 
 ## Run Locally
 
@@ -60,19 +60,15 @@ npm run preview
 
 ## Encryption Lab
 
-The Lab section lets a user encrypt and decrypt text entirely in the browser. The helper in `src/lib/crypto.js`:
+The Lab section lets users encrypt and decrypt text in a closed box. The helper in `src/lib/crypto.js`:
 
 - Derives a 256-bit AES-GCM key from a password with PBKDF2-SHA256
 - Uses 600,000 PBKDF2 iterations
 - Generates a random 16-byte salt
-- Generates a random 12-byte initialization vector
-- Returns a versioned `mqb1` payload containing Base64URL-encoded salt, IV, and ciphertext
+- Generates a 12-byte ObjectId (timestamp included, MongoDB-compatible)
+- Uses the raw ObjectId bytes as the AES-GCM nonce
+- Returns a versioned `mv1` payload containing Base64URL-encoded ObjectId, salt, and ciphertext
 - Validates encrypted payload structure before attempting decryption
-- Supports the earlier legacy `salt + iv + ciphertext` Base64 payload format for backward compatibility
-
-Nothing is sent to a server by this project. The plaintext, password, and ciphertext live only in the browser runtime unless the user copies or stores them elsewhere.
-
-Security note: Maio Quantum Box is designed for cases where the shared password is exchanged offline or through a separate trusted channel, so it does not include direct online key exchange. AES-256-GCM provides a strong symmetric-encryption margin, including against known quantum search attacks when paired with a strong password. This project is still not a formally audited security product, and password strength remains critical.
 
 ## Configuration Notes
 
